@@ -42,7 +42,8 @@ inline void CalculateExplicitPadding(bool padding_same,
                                      int32_t stride,
                                      int32_t filter_size,
                                      int32_t& padding_head,
-                                     int32_t& padding_tail) {
+                                     int32_t& padding_tail,
+                                     int32_t dilation = 1) {
   padding_head = 0;
   padding_tail = 0;
 
@@ -50,8 +51,8 @@ inline void CalculateExplicitPadding(bool padding_same,
     int32_t out_size = (in_size + stride - 1) / stride;
     int32_t tmp = (out_size - 1) * stride + filter_size;
     if (tmp > in_size) {
-      padding_head = (tmp - in_size) / 2;
-      padding_tail = (tmp - in_size) - padding_head;
+      padding_head = ((tmp - in_size) / 2) * dilation;
+      padding_tail = ((tmp - in_size) - padding_head) * dilation;
     }
   }
 }
@@ -762,14 +763,18 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
   int32_t padding_left, padding_right, padding_top, padding_bottom,
       padding_code;
   if ((!depthwise && inputs.size() == 10) ||
-      (depthwise && inputs.size() == 11)) {
+      (depthwise && inputs.size() == 11) ||
+      (!depthwise && inputs.size() == 12) ||
+      (depthwise && inputs.size() == 13)) {
     implicit_padding = false;
     padding_left = getScalarInt32(values_[inputs[index++]], memory_.get());
     padding_right = getScalarInt32(values_[inputs[index++]], memory_.get());
     padding_top = getScalarInt32(values_[inputs[index++]], memory_.get());
     padding_bottom = getScalarInt32(values_[inputs[index++]], memory_.get());
   } else if ((!depthwise && inputs.size() == 7) ||
-             (depthwise && inputs.size() == 8)) {
+             (depthwise && inputs.size() == 8) ||
+             (!depthwise && inputs.size() == 9) ||
+             (depthwise && inputs.size() == 10)) {
     implicit_padding = true;
     padding_code = getScalarInt32(values_[inputs[index++]], memory_.get());
   } else {
@@ -793,6 +798,13 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
   }
   const int32_t fuse_code =
       getScalarInt32(values_[inputs[index++]], memory_.get());
+  
+  int32_t dilation_x = 1;
+  int32_t dilation_y = 1;
+  if (index < inputs.size() - 1) {
+    dilation_x = getScalarInt32(values_[inputs[index++]], memory_.get());
+    dilation_y = getScalarInt32(values_[inputs[index++]], memory_.get());
+  }
 
   DLOG(INFO) << "  input_height: " << input_height;
   DLOG(INFO) << "  input_width: " << input_width;
@@ -819,6 +831,8 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
     DLOG(INFO) << "  depthwise_multiplier: " << depthwise_multiplier;
   }
   DLOG(INFO) << "  fuse_code: " << fuse_code;
+  DLOG(INFO) << "  dilation_x: " << dilation_x;
+  DLOG(INFO) << "  dilation_y: " << dilation_y;
 
   // Create convolution descriptor.
   cldnn_status status;
@@ -990,10 +1004,10 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
   if (implicit_padding) {
     CalculateExplicitPadding(padding_code == mojom::PADDING_SAME, input_width,
                              stride_width, filter_width, padding_left,
-                             padding_right);
+                             padding_right, dilation_x);
     CalculateExplicitPadding(padding_code == mojom::PADDING_SAME, input_height,
                              stride_height, filter_height, padding_top,
-                             padding_bottom);
+                             padding_bottom, dilation_y);
     DLOG(INFO) << "  padding_left: " << padding_left;
     DLOG(INFO) << "  padding_right: " << padding_right;
     DLOG(INFO) << "  padding_top: " << padding_top;
@@ -1023,7 +1037,7 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
   }
 
   // Setup dilation.
-  conv_desc.dilation = {1, 1, 2, {1, 1, 1, 1, 1, 1, 1, 1}};
+  conv_desc.dilation = {1, 1, 2, {1, 1, dilation_x, dilation_y, 1, 1, 1, 1}};
 
   // Setup output.
   conv_desc.with_output_size = 1;
