@@ -70,6 +70,7 @@
 #include "gpu/ipc/in_process_command_buffer.h"
 #include "media/base/media_switches.h"
 #include "media/media_buildflags.h"
+#include "services/ml/switches.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "services/service_manager/public/cpp/connector.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
@@ -254,6 +255,7 @@ static const char* const kSwitchNames[] = {
 #endif
     switches::kWebglAntialiasingMode,
     switches::kWebglMSAASampleCount,
+    ml::switches::kUseNgraph,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and

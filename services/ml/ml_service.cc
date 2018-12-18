@@ -4,10 +4,13 @@
 
 #include "services/ml/ml_service.h"
 
+#include "base/command_line.h"
 #include "base/macros.h"
 #include "build/build_config.h"
 #include "services/service_manager/public/cpp/service_context.h"
 #if defined(OS_LINUX)
+#include "services/ml/switches.h"
+#include "services/ml/neural_network_impl_ngraph.h"
 #include "services/ml/neural_network_impl_cl_dnn.h"
 #elif defined(OS_ANDROID)
 #include "services/ml/neural_network_impl_android.h"
@@ -34,7 +37,12 @@ void MLService::OnStart() {
       context()->CreateQuitClosure()));
 
 #if defined(OS_LINUX)
-  registry_.AddInterface(base::Bind(&NeuralNetworkImplClDnn::Create));
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (command_line->HasSwitch(switches::kUseNgraph)) {
+    registry_.AddInterface(base::Bind(&NeuralNetworkImplNgraph::Create));
+  } else {
+    registry_.AddInterface(base::Bind(&NeuralNetworkImplClDnn::Create));
+  }
 #elif defined(OS_ANDROID)
   registry_.AddInterface(base::Bind(&NeuralNetworkImplAndroid::Create));
 #elif defined(OS_MACOSX)
