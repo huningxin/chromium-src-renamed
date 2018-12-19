@@ -25,7 +25,7 @@
 #include "third_party/clDNN/api/C/softmax.h"
 
 #if defined(OS_LINUX)
-constexpr char kClDnnVersion[] = "9.1";
+// constexpr char kClDnnVersion[] = "9.1";
 
 ml::ClDnnSymbolTable* GetClDnnSymbolTable() {
   static ml::ClDnnSymbolTable* cl_dnn_symbol_table = new ml::ClDnnSymbolTable();
@@ -81,13 +81,13 @@ ModelImplClDnn::ModelImplClDnn() : engine_(nullptr), topology_(nullptr) {
                                      std::to_string(version.revision);
   DLOG(INFO) << "[clDNN] version: " << cl_dnn_version;
 #if defined(OS_LINUX)
-  if (major_version != kClDnnVersion) {
-    LOG(ERROR) << "[clDNN] current clDNN version" << cl_dnn_version
-               << " isn't supported, please install OpenVINO 2018 R3 that "
-                  "inlucdes verified version "
-               << kClDnnVersion;
-    return;
-  }
+  // if (major_version != kClDnnVersion) {
+  //   LOG(ERROR) << "[clDNN] current clDNN version" << cl_dnn_version
+  //              << " isn't supported, please install OpenVINO 2018 R3 that "
+  //                 "inlucdes verified version "
+  //              << kClDnnVersion;
+  //   return;
+  // }
 #endif
 
   uint32_t engine_count =
@@ -403,19 +403,21 @@ int32_t ModelImplClDnn::CldnnGetLayout(const Operand& operand,
   }
   layout = {.data_type = cldnn_f32, .format = format, .padding = {}};
   if (operand.dimensions.size() == 1) {
-    layout.size = {1, 1, 2, {1, 1, operand.dimensions[0], 1, 1, 1, 1, 1}};
+    layout.size = {1, 1, 2, 0, {1, 1, operand.dimensions[0], 1, 1, 1, 1, 1}};
   } else if (operand.dimensions.size() == 2) {
     // HW -> {batch, feature, width, height}
     layout.size = {
         1,
         1,
         2,
+        0,
         {1, 1, operand.dimensions[1], operand.dimensions[0], 1, 1, 1, 1}};
   } else if (operand.dimensions.size() == 3) {
     // HWC -> {batch, feature, width, height}
     layout.size = {1,
                    1,
                    2,
+                   0,
                    {1, operand.dimensions[2], operand.dimensions[1],
                     operand.dimensions[0], 1, 1, 1, 1}};
   } else if (operand.dimensions.size() == 4) {
@@ -423,6 +425,7 @@ int32_t ModelImplClDnn::CldnnGetLayout(const Operand& operand,
     layout.size = {1,
                    1,
                    2,
+                   0,
                    {operand.dimensions[0], operand.dimensions[3],
                     operand.dimensions[2], operand.dimensions[1], 1, 1, 1, 1}};
   } else {
@@ -485,7 +488,7 @@ int32_t ModelImplClDnn::CldnnAddReorder(const std::string& input_name,
   reorder_desc.input = {.data = input_ids_array.data(),
                         .size = input_ids_array.size()};
   // Setup mean mode.
-  const std::string empty;
+  const std::string empty("");
   reorder_desc.mean_subtract = empty.c_str();
   reorder_desc.subtract_per_feature = {.data = nullptr, .size = 0};
   reorder_desc.mean_mode = mean_none;
@@ -871,7 +874,7 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
     const cldnn_layout weights_layout = {
         .data_type = cldnn_f32,
         .format = cldnn_format_bfyx,
-        .size = {1, 1, 2, {1, 1, filter_width, filter_height, 1, 1, 1, 1}},
+        .size = {1, 1, 2, 0, {1, 1, filter_width, filter_height, 1, 1, 1, 1}},
         .padding = {}};
     weight_ids_array.resize(depth_out);
     weight_ids.resize(depth_out);
@@ -882,7 +885,7 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
     const cldnn_layout bias_layout = {
         .data_type = cldnn_f32,
         .format = cldnn_format_bfyx,
-        .size = {1, 1, 2, {1, 1, 1, 1, 1, 1, 1, 1}},
+        .size = {1, 1, 2, 0, {1, 1, 1, 1, 1, 1, 1, 1}},
         .padding = {}};
     bias_ids_array.resize(depth_out);
     bias_ids.resize(depth_out);
@@ -1023,10 +1026,10 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
   }
 
   conv_desc.input_offset = {
-      1, 1, 2, {0, 0, -padding_left, -padding_top, 0, 0, 0, 0}};
+      1, 1, 2, 0, {0, 0, -padding_left, -padding_top, 0, 0, 0, 0}};
 
   // Setup stride.
-  conv_desc.stride = {1, 1, 2, {1, 1, stride_width, stride_height, 1, 1, 1, 1}};
+  conv_desc.stride = {1, 1, 2, 0, {1, 1, stride_width, stride_height, 1, 1, 1, 1}};
 
   std::string id_str = base::NumberToString(output_index);
   // Setup activation.
@@ -1046,7 +1049,7 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
 
   // Setup dilation.
   conv_desc.dilation = {
-      1, 1, 2, {1, 1, dilation_width, dilation_height, 1, 1, 1, 1}};
+      1, 1, 2, 0, {1, 1, dilation_width, dilation_height, 1, 1, 1, 1}};
 
   // Setup output.
   conv_desc.with_output_size = 1;
@@ -1054,6 +1057,7 @@ int32_t ModelImplClDnn::CldnnAddConvolution(
       1,
       1,
       2,
+      0,
       {output_batch, output_channel, output_width, output_height, 1, 1, 1, 1}};
 
   // Add primitive into topology.
@@ -1172,7 +1176,7 @@ int32_t ModelImplClDnn::CldnnAddPooling(int32_t type,
   }
 
   // Setup kernel size.
-  pool_desc.size = {1, 1, 2, {1, 1, filter_width, filter_height, 1, 1, 1, 1}};
+  pool_desc.size = {1, 1, 2, 0, {1, 1, filter_width, filter_height, 1, 1, 1, 1}};
 
   // Setup paddings.
   if (implicit_padding) {
@@ -1188,10 +1192,10 @@ int32_t ModelImplClDnn::CldnnAddPooling(int32_t type,
     DLOG(INFO) << "  padding_bottom: " << padding_bottom;
   }
   pool_desc.input_offset = {
-      1, 1, 2, {0, 0, -padding_left, -padding_top, 0, 0, 0, 0}};
+      1, 1, 2, 0, {0, 0, -padding_left, -padding_top, 0, 0, 0, 0}};
 
   // Setup stride.
-  pool_desc.stride = {1, 1, 2, {1, 1, stride_width, stride_height, 1, 1, 1, 1}};
+  pool_desc.stride = {1, 1, 2, 0, {1, 1, stride_width, stride_height, 1, 1, 1, 1}};
 
   // Setup output.
   pool_desc.with_output_size = 1;
@@ -1199,6 +1203,7 @@ int32_t ModelImplClDnn::CldnnAddPooling(int32_t type,
       1,
       1,
       2,
+      0,
       {output_batch, output_channel, output_width, output_height, 1, 1, 1, 1}};
 
   // Setup argmax.
@@ -1522,7 +1527,7 @@ int32_t ModelImplClDnn::CldnnAddFullyConnected(
 
   // Setup output shape.
   reshape_desc.output_shape = {
-      1, 1, 2, {input_batch_size, 1, input_size, 1, 1, 1, 1, 1}};
+      1, 1, 2, 0, {input_batch_size, 1, input_size, 1, 1, 1, 1, 1}};
 
   // Setup id and add into topology.
   std::string reshape_id_str(base::NumberToString(input_index) +
@@ -1553,7 +1558,7 @@ int32_t ModelImplClDnn::CldnnAddFullyConnected(
   const cldnn_layout weights_layout = {
       .data_type = cldnn_f32,
       .format = cldnn_format_bfyx,
-      .size = {1, 1, 2, {num_units, 1, input_size, 1, 1, 1, 1, 1}},
+      .size = {1, 1, 2, 0, {num_units, 1, input_size, 1, 1, 1, 1, 1}},
       .padding = {}};
   cldnn_memory weights_memory =
       LATE(cldnn_allocate_memory)(engine_, weights_layout, &status);

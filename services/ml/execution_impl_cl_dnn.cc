@@ -50,19 +50,21 @@ ExecutionImplClDnn::ExecutionImplClDnn(const CompilationImplClDnn* compilation,
     cldnn_layout layout = {
         .data_type = cldnn_f32, .format = cldnn_format_byxf, .padding = {}};
     if (operand.dimensions.size() == 1) {
-      layout.size = {1, 1, 2, {1, 1, operand.dimensions[0], 1, 1, 1, 1, 1}};
+      layout.size = {1, 1, 2, 0, {1, 1, operand.dimensions[0], 1, 1, 1, 1, 1}};
     } else if (operand.dimensions.size() == 2) {
       // HW -> {batch, feature, width, height}
       layout.size = {
           1,
           1,
           2,
+          0,
           {1, 1, operand.dimensions[1], operand.dimensions[0], 1, 1, 1, 1}};
     } else if (operand.dimensions.size() == 3) {
       // HWC -> {batch, feature, width, height}
       layout.size = {1,
                      1,
                      2,
+                     0,
                      {1, operand.dimensions[2], operand.dimensions[1],
                       operand.dimensions[0], 1, 1, 1, 1}};
     } else if (operand.dimensions.size() == 4) {
@@ -71,6 +73,7 @@ ExecutionImplClDnn::ExecutionImplClDnn(const CompilationImplClDnn* compilation,
           1,
           1,
           2,
+          0,
           {operand.dimensions[0], operand.dimensions[3], operand.dimensions[2],
            operand.dimensions[1], 1, 1, 1, 1}};
     } else {
