@@ -10,6 +10,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "services/ml/compilation_impl_ngraph.h"
 #include "services/ml/public/interfaces/constants.mojom.h"
+#include "third_party/ngraph/include/ngraph/ngraph.hpp"
 
 namespace ml {
 

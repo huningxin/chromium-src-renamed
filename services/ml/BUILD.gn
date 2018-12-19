@@ -41,6 +41,12 @@ source_set("lib") {
       "neural_network_impl_ngraph.cc",
       "neural_network_impl_ngraph.h",
     ]
+
+    include_dirs = [ "//third_party/ngraph/include" ]
+
+    configs -= [ "//build/config/compiler:no_exceptions" ]
+    configs += [ "//build/config/compiler:exceptions" ]
+
   } else if (is_android) {
     sources += [
       "compilation_impl_android.cc",
