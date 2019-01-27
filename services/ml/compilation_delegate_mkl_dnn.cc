@@ -200,7 +200,8 @@ int32_t CompilationDelegateMklDnn::MkldnnGetMemoryFormat(
 
 int32_t CompilationDelegateMklDnn::MkldnnGetDims(
     const std::vector<uint32_t>& dimensions,
-    std::vector<int32_t>& mkldnn_dims) {
+    std::vector<int32_t>& mkldnn_dims,
+    mkldnn_memory_format_t format) {
   mkldnn_dims.resize(dimensions.size());
   if (dimensions.size() == 1) {
     mkldnn_dims[0] = dimensions[0];
@@ -214,12 +215,23 @@ int32_t CompilationDelegateMklDnn::MkldnnGetDims(
     mkldnn_dims[1] = dimensions[2];
     mkldnn_dims[2] = dimensions[1];
   } else if (dimensions.size() == 4) {
-    // mkldnn logical dimensions come in the order: (n, c, h, w)
-    // WebNN order is nhwc
-    mkldnn_dims[0] = dimensions[0];
-    mkldnn_dims[1] = dimensions[3];
-    mkldnn_dims[2] = dimensions[1];
-    mkldnn_dims[3] = dimensions[2];
+    if (format == mkldnn_hwigo) {
+      // for depthwise weights, come in the order: (g, o, i, h, w)
+      // WebNN order is ihwo where o is the number of filters
+      mkldnn_dims.resize(5);
+      mkldnn_dims[0] = dimensions[3];
+      mkldnn_dims[1] = 1;
+      mkldnn_dims[2] = 1;
+      mkldnn_dims[3] = dimensions[1];
+      mkldnn_dims[4] = dimensions[2];
+    } else {
+      // mkldnn logical dimensions come in the order: (n, c, h, w)
+      // WebNN order is nhwc
+      mkldnn_dims[0] = dimensions[0];
+      mkldnn_dims[1] = dimensions[3];
+      mkldnn_dims[2] = dimensions[1];
+      mkldnn_dims[3] = dimensions[2];
+    }
   } else {
     LOG(ERROR) << "Tensor rank " << dimensions.size() << " is not supproted";
     return mojom::BAD_DATA;
@@ -259,7 +271,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddMemory(
     format = *user_format;
   }
   std::vector<int32_t> dims;
-  result = MkldnnGetDims(operand->dimensions, dims);
+  result = MkldnnGetDims(operand->dimensions, dims, format);
   if (result != mojom::NOT_ERROR) {
     return result;
   }
@@ -332,7 +344,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddOutput(uint32_t index) {
     return result;
   }
   std::vector<int32_t> dims;
-  result = MkldnnGetDims(operand->dimensions, dims);
+  result = MkldnnGetDims(operand->dimensions, dims, format);
   if (result != mojom::NOT_ERROR) {
     return result;
   }
@@ -521,8 +533,13 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   int32_t result = compilation_->GetConvParams(operation, params);
   if (result != mojom::NOT_ERROR)
     return result;
-  if (params.depthwise || params.atrous) {
+  if (params.atrous) {
     LOG(ERROR) << "Operation type " << operation->type << " is not supported";
+    return mojom::BAD_DATA;
+  }
+  if (params.depthwise && params.depthwise_multiplier != 1) {
+    LOG(ERROR) << "depthwise_multiplier " << params.depthwise_multiplier
+               << " is not supported";
     return mojom::BAD_DATA;
   }
   mkldnn_status_t status;
@@ -537,11 +554,19 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
     return mojom::OP_FAILED;
   }
   mkldnn_memory_desc_t weights_desc;
-  // Weights logical order is oihw
-  int weights_dims[4] = {params.depth_out, params.depth_in,
-                         params.filter_height, params.filter_width};
-  status = LATE(mkldnn_memory_desc_init)
-      (&weights_desc, 4, weights_dims, mkldnn_f32, mkldnn_any);
+  if (params.depthwise) {
+    // Weights logical order is (g, o, i, h, w)
+    int weights_dims[5] = {params.depth_out, 1, 1,
+                           params.filter_height, params.filter_width};
+    status = LATE(mkldnn_memory_desc_init)
+        (&weights_desc, 5, weights_dims, mkldnn_f32, mkldnn_hwigo);
+  } else {
+    // Weights logical order is oihw
+    int weights_dims[4] = {params.depth_out, params.depth_in,
+                           params.filter_height, params.filter_width};
+    status = LATE(mkldnn_memory_desc_init)
+        (&weights_desc, 4, weights_dims, mkldnn_f32, mkldnn_any);
+  }
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
     return mojom::OP_FAILED;
@@ -699,7 +724,12 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   DLOG(INFO) << "Add weights memory";
   // Use mkldnn_nhwc as weights format, since there is no mkldnn_ohwi.
   // Please refer to https://github.com/intel/mkl-dnn/issues/156
-  mkldnn_memory_format_t weights_format = mkldnn_nhwc;
+  mkldnn_memory_format_t weights_format;
+  if (params.depthwise) {
+    weights_format = mkldnn_hwigo;
+  } else {
+    weights_format = mkldnn_nhwc;
+  }
   result = MkldnnAddMemory(operation->inputs[1], &weights_format);
   if (result != mojom::NOT_ERROR) {
     LATE(mkldnn_primitive_desc_destroy)(conv_pd);
