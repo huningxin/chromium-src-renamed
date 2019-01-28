@@ -62,6 +62,9 @@ class CompilationDelegateMklDnn : public CompilationDelegate {
   int32_t MkldnnAddReorder(const std::string& input_name,
                            const std::string& output_name,
                            bool run = false);
+  int32_t MkldnnAddFusedActivation(const std::string&,
+                                   const std::string&,
+                                   int32_t);
   int32_t MkldnnAddElementwise(const mojom::OperationPtr&);
   int32_t MkldnnAddConvolution(const mojom::OperationPtr&);
   int32_t MkldnnAddPooling(const mojom::OperationPtr&);

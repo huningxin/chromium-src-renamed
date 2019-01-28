@@ -521,6 +521,93 @@ int32_t CompilationDelegateMklDnn::MkldnnAddReorder(
   return mojom::NOT_ERROR;
 }
 
+int32_t CompilationDelegateMklDnn::MkldnnAddFusedActivation(
+    const std::string& input_name,
+    const std::string& output_name,
+    int32_t fuse_code) {
+  if (compiled_model_->memories.find(input_name) ==
+      compiled_model_->memories.end()) {
+    LOG(ERROR) << "Input memory is not ready";
+    return mojom::BAD_DATA;
+  }
+  mkldnn_status_t status;
+  mkldnn_primitive_t input_memory = compiled_model_->memories[input_name];
+  const_mkldnn_primitive_desc_t input_pd;
+  status = LATE(mkldnn_primitive_get_primitive_desc)(input_memory, &input_pd);
+  if (status != mkldnn_success) {
+    LOG(ERROR) << "[MKLDNN] failed to get primitive descriptor " << status;
+    return mojom::OP_FAILED;
+  }
+  const mkldnn_memory_desc_t* input_md =
+      LATE(mkldnn_primitive_desc_query_memory_d)(input_pd);
+  mkldnn_eltwise_desc_t activation_desc;
+  mkldnn_alg_kind_t relu_kind;
+  float alpha = 0.0;
+  if (fuse_code == mojom::FUSED_RELU) {
+    relu_kind = mkldnn_eltwise_relu;
+  } else if (fuse_code == mojom::FUSED_RELU1) {
+    relu_kind = mkldnn_eltwise_bounded_relu;
+    alpha = 1.0;
+  } else if (fuse_code == mojom::FUSED_RELU6) {
+    relu_kind = mkldnn_eltwise_bounded_relu;
+    alpha = 6.0;
+  } else {
+    LOG(ERROR) << "Fuse code " << fuse_code << " is not supported";
+    return mojom::BAD_DATA;
+  }
+  status = LATE(mkldnn_eltwise_forward_desc_init)(
+      &activation_desc, mkldnn_forward, relu_kind, input_md, alpha, 0.0);
+  if (status != mkldnn_success) {
+    LOG(ERROR) << "[MKLDNN] failed to init eltwise descriptor " << status;
+    return mojom::OP_FAILED;
+  }
+  mkldnn_primitive_desc_t activation_pd;
+  status = LATE(mkldnn_primitive_desc_create)
+      (&activation_pd, &activation_desc, compiled_model_->engine, NULL);
+  if (status != mkldnn_success) {
+    LOG(ERROR) << "[MKLDNN] failed to create primitive descriptor " << status;
+    return mojom::OP_FAILED;
+  }
+  mkldnn_primitive_t output_memory;
+  const_mkldnn_primitive_desc_t output_pd =
+      LATE(mkldnn_primitive_desc_query_pd)(activation_pd, mkldnn_query_dst_pd, 0);
+  status = LATE(mkldnn_primitive_create)(&output_memory, output_pd, NULL, NULL);
+  if (status != mkldnn_success) {
+    LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
+    LATE(mkldnn_primitive_desc_destroy)(activation_pd);
+    return mojom::OP_FAILED;
+  }
+  size_t buffer_size = LATE(mkldnn_memory_primitive_desc_get_size)(output_pd);
+  void *buffer = base::AlignedAlloc(buffer_size, ALIGNMENT);
+  status = LATE(mkldnn_memory_set_data_handle)(output_memory, buffer);
+  if (status != mkldnn_success) {
+    LOG(ERROR) << "[MKLDNN] failed to set data handle to memory primitive " << status;
+    LATE(mkldnn_primitive_desc_destroy)(activation_pd);
+    LATE(mkldnn_primitive_destroy)(output_memory);
+    base::AlignedFree(buffer);
+    return mojom::OP_FAILED;
+  }
+  compiled_model_->memories[output_name] = output_memory;
+
+  mkldnn_primitive_t activation;
+  mkldnn_primitive_at_t inputs[] = {LATE(mkldnn_primitive_at)(input_memory, 0)};
+  const_mkldnn_primitive_t outputs[] = { output_memory };
+
+  status = LATE(mkldnn_primitive_create)
+      (&activation, activation_pd, inputs, outputs);
+  if (status != mkldnn_success) {
+    LOG(ERROR) << "[MKLDNN] failed to set data handle to memory primitive " << status;
+    LATE(mkldnn_primitive_desc_destroy)(activation_pd);
+    return mojom::OP_FAILED;
+  }
+  LATE(mkldnn_primitive_desc_destroy)(activation_pd);
+
+  OperationMklDnn operation(activation);
+  compiled_model_->operations.push_back(operation);
+
+  return mojom::NOT_ERROR;
+}
+
 int32_t CompilationDelegateMklDnn::MkldnnAddElementwise(
     const mojom::OperationPtr& operation) {
   LOG(ERROR) << "Operation type " << operation->type << " is not supported.";
@@ -605,7 +692,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   DLOG(INFO) << "[MKLDNN] succeed to init convolution descriptor";
 
   mkldnn_primitive_desc_t conv_pd;
-  if (params.fuse_code == mojom::FUSED_NONE) {
+  if (params.fuse_code == mojom::FUSED_NONE || params.depthwise) {
     status = LATE(mkldnn_primitive_desc_create)
         (&conv_pd, &conv_desc, compiled_model_->engine, NULL);
     if (status != mkldnn_success) {
@@ -614,6 +701,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
       return mojom::OP_FAILED;
     }
   } else {
+    // mkl-dnn only supports fused activation for normal convolution.
     mkldnn_primitive_attr_t attr;
     status = LATE(mkldnn_primitive_attr_create)(&attr);
     if (status != mkldnn_success) {
@@ -802,6 +890,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
       (&output_memory, output_pd, NULL, NULL);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
+    LATE(mkldnn_primitive_desc_destroy)(conv_pd);
     return mojom::OP_FAILED;
   }
   size_t output_size = LATE(mkldnn_memory_primitive_desc_get_size)(output_pd);
@@ -809,12 +898,22 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   status = LATE(mkldnn_memory_set_data_handle)(output_memory, output_buffer);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to set data handle " << status;
+    LATE(mkldnn_primitive_desc_destroy)(conv_pd);
+    LATE(mkldnn_primitive_destroy)(output_memory);
+    base::AlignedFree(output_buffer);
     return mojom::OP_FAILED;
   }
   DLOG(INFO) << "[MKLDNN] succeed to set data handle with size " << output_size;
   std::string output_id(base::NumberToString(operation->outputs[0]));
-  compiled_model_->memories[output_id] = output_memory;
-  DLOG(INFO) << "[MKLDNN] succeed to create memory primitive for " << output_id;
+  std::string conv_output_id(output_id);
+  if (params.depthwise && params.fuse_code != mojom::FUSED_NONE) {
+    // Need to add activation primitive layer.
+    // The output of conv becomes pre-activation
+    conv_output_id += std::string("-pre-activation");
+  }
+  compiled_model_->memories[conv_output_id] = output_memory;
+  DLOG(INFO) << "[MKLDNN] succeed to create memory primitive for "
+             << conv_output_id;
 
   mkldnn_primitive_at_t conv_srcs[] = {
     LATE(mkldnn_primitive_at)(input_memory, 0),
@@ -827,12 +926,24 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   status = LATE(mkldnn_primitive_create)(&conv, conv_pd, conv_srcs, conv_dsts);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create convolution primitive " << status;
+    LATE(mkldnn_primitive_desc_destroy)(conv_pd);
     return mojom::OP_FAILED;
   }
+  LATE(mkldnn_primitive_desc_destroy)(conv_pd);
+
   OperationMklDnn mkldnn_operation(conv);
   compiled_model_->operations.push_back(mkldnn_operation);
 
   DLOG(INFO) << "[MKLDNN] succeed to create convolution primitive";
+
+  if (params.depthwise && params.fuse_code != mojom::FUSED_NONE) {
+    // Append an activation primitive that uses conv's output memory as input
+    // and output is named as output_id.
+    result = MkldnnAddFusedActivation(
+        conv_output_id, output_id, params.fuse_code);
+    if (result != mojom::NOT_ERROR)
+      return result;
+  }
   return mojom::NOT_ERROR;
 }
 
