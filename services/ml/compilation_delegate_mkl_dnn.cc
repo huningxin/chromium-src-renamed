@@ -18,8 +18,7 @@ static const uint32_t ALIGNMENT = 64;
 namespace ml {
 
 OperationMklDnn::OperationMklDnn(mkldnn_primitive_t mkldnn_primitive)
-    : primitive(mkldnn_primitive),
-      type (-1) {}
+    : primitive(mkldnn_primitive), type(-1) {}
 OperationMklDnn::~OperationMklDnn() = default;
 OperationMklDnn::OperationMklDnn(const OperationMklDnn& rhs) {
   primitive = rhs.primitive;
@@ -36,12 +35,14 @@ CompiledModelMklDnn::~CompiledModelMklDnn() {
     if (itr->primitive) {
       status = LATE(mkldnn_primitive_destroy)(itr->primitive);
       if (status != mkldnn_success) {
-        LOG(ERROR) << "[MKLDNN] failed to destroy operation primitive " << status;
+        LOG(ERROR) << "[MKLDNN] failed to destroy operation primitive "
+                   << status;
       }
       DLOG(INFO) << "[MKLDNN] succeed to destroy operation primitive";
     }
   }
-  for (std::map<std::string, mkldnn_primitive_t>::iterator itr = memories.begin();
+  for (std::map<std::string, mkldnn_primitive_t>::iterator itr =
+           memories.begin();
        itr != memories.end(); ++itr) {
     mkldnn_primitive_t primitive = itr->second;
     void* buffer = nullptr;
@@ -71,8 +72,7 @@ CompiledModelMklDnn::~CompiledModelMklDnn() {
 
 CompilationDelegateMklDnn::CompilationDelegateMklDnn(
     const CompilationImpl* compilation)
-    : CompilationDelegate(),
-      compilation_(compilation) {}
+    : CompilationDelegate(), compilation_(compilation) {}
 
 CompilationDelegateMklDnn::~CompilationDelegateMklDnn() {}
 
@@ -95,9 +95,8 @@ int32_t CompilationDelegateMklDnn::Compile() {
 
 std::unique_ptr<mojom::Execution> CompilationDelegateMklDnn::CreateExecution(
     mojom::ExecutionInitParamsPtr params) {
-  return std::make_unique<ExecutionImplMklDnn>(
-      std::move(compiled_model_),
-      std::move(params));
+  return std::make_unique<ExecutionImplMklDnn>(std::move(compiled_model_),
+                                               std::move(params));
 }
 
 int32_t CompilationDelegateMklDnn::MkldnnInit() {
@@ -111,8 +110,7 @@ int32_t CompilationDelegateMklDnn::MkldnnInit() {
   compiled_model_.reset(new CompiledModelMklDnn());
 
   mkldnn_status_t status;
-  status = LATE(mkldnn_engine_create)
-      (&compiled_model_->engine, mkldnn_cpu, 0);
+  status = LATE(mkldnn_engine_create)(&compiled_model_->engine, mkldnn_cpu, 0);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create engine " << status;
     return mojom::OP_FAILED;
@@ -240,7 +238,8 @@ int32_t CompilationDelegateMklDnn::MkldnnGetDims(
 }
 
 int32_t CompilationDelegateMklDnn::MkldnnGetDataType(
-    int32_t type, mkldnn_data_type_t* mkldnn_type) {
+    int32_t type,
+    mkldnn_data_type_t* mkldnn_type) {
   if (type == mojom::TENSOR_FLOAT32) {
     *mkldnn_type = mkldnn_f32;
   } else if (type == mojom::TENSOR_INT32) {
@@ -253,7 +252,8 @@ int32_t CompilationDelegateMklDnn::MkldnnGetDataType(
 }
 
 int32_t CompilationDelegateMklDnn::MkldnnAddMemory(
-    uint32_t index, mkldnn_memory_format_t* user_format) {
+    uint32_t index,
+    mkldnn_memory_format_t* user_format) {
   const mojom::ModelInfoPtr& model = compilation_->GetModel();
   const mojom::OperandPtr& operand = model->operands[index];
   mkldnn_data_type_t data_type;
@@ -276,28 +276,27 @@ int32_t CompilationDelegateMklDnn::MkldnnAddMemory(
     return result;
   }
   mkldnn_memory_desc_t memory_desc;
-  mkldnn_status_t status = LATE(mkldnn_memory_desc_init)
-      (&memory_desc, dims.size(), dims.data(), data_type, format);
+  mkldnn_status_t status = LATE(mkldnn_memory_desc_init)(
+      &memory_desc, dims.size(), dims.data(), data_type, format);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
     return mojom::OP_FAILED;
   }
   mkldnn_primitive_desc_t memory_pd;
-  status = LATE(mkldnn_memory_primitive_desc_create)
-      (&memory_pd, &memory_desc, compiled_model_->engine);
+  status = LATE(mkldnn_memory_primitive_desc_create)(&memory_pd, &memory_desc,
+                                                     compiled_model_->engine);
   if (status != mkldnn_success) {
-    LOG(ERROR) << "[MKLDNN] failed to create memory primitive descriptor " << status;
+    LOG(ERROR) << "[MKLDNN] failed to create memory primitive descriptor "
+               << status;
     return mojom::OP_FAILED;
   }
   mkldnn_primitive_t memory;
-  status = LATE(mkldnn_primitive_create)
-    (&memory, memory_pd, NULL, NULL);
+  status = LATE(mkldnn_primitive_create)(&memory, memory_pd, NULL, NULL);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
     return mojom::OP_FAILED;
   }
-  size_t buffer_size =
-        LATE(mkldnn_memory_primitive_desc_get_size)(memory_pd);
+  size_t buffer_size = LATE(mkldnn_memory_primitive_desc_get_size)(memory_pd);
   void* buffer = base::AlignedAlloc(buffer_size, ALIGNMENT);
   status = LATE(mkldnn_memory_set_data_handle)(memory, buffer);
   if (status != mkldnn_success) {
@@ -309,8 +308,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddMemory(
              << buffer_size;
   std::string index_id(base::NumberToString(index));
   if (model->values.find(index_id) != model->values.end()) {
-    const mojom::OperandValueInfoPtr& value_info =
-        model->values[index_id];
+    const mojom::OperandValueInfoPtr& value_info = model->values[index_id];
     auto mapping = compilation_->MapMemory(index);
     memcpy(buffer, mapping.get(), value_info->length);
     DLOG(INFO) << "[MKLDNN] copy user data with size " << value_info->length
@@ -319,7 +317,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddMemory(
   compiled_model_->memories[index_id] = memory;
   status = LATE(mkldnn_primitive_desc_destroy)(memory_pd);
   if (status != mkldnn_success) {
-    LOG(ERROR) << "[MKLDNN] failed to destroy memory primitive descriptor " << status;
+    LOG(ERROR) << "[MKLDNN] failed to destroy memory primitive descriptor "
+               << status;
     return mojom::OP_FAILED;
   }
   DLOG(INFO) << "[MKLDNN] succeed to create memory primitve for " << index_id;
@@ -349,17 +348,18 @@ int32_t CompilationDelegateMklDnn::MkldnnAddOutput(uint32_t index) {
     return result;
   }
   mkldnn_memory_desc_t output_desc;
-  mkldnn_status_t status = LATE(mkldnn_memory_desc_init)
-      (&output_desc, dims.size(), dims.data(), data_type, format);
+  mkldnn_status_t status = LATE(mkldnn_memory_desc_init)(
+      &output_desc, dims.size(), dims.data(), data_type, format);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
     return mojom::OP_FAILED;
   }
   mkldnn_primitive_desc_t output_pd;
-  status = LATE(mkldnn_memory_primitive_desc_create)
-      (&output_pd, &output_desc, compiled_model_->engine);
+  status = LATE(mkldnn_memory_primitive_desc_create)(&output_pd, &output_desc,
+                                                     compiled_model_->engine);
   if (status != mkldnn_success) {
-    LOG(ERROR) << "[MKLDNN] failed to create memory primitive descriptor " << status;
+    LOG(ERROR) << "[MKLDNN] failed to create memory primitive descriptor "
+               << status;
     return mojom::OP_FAILED;
   }
   std::string internal_output_id(base::NumberToString(index));
@@ -367,22 +367,23 @@ int32_t CompilationDelegateMklDnn::MkldnnAddOutput(uint32_t index) {
       compiled_model_->memories.end()) {
     LOG(ERROR) << "Output memory is not ready";
     return mojom::BAD_DATA;
-  } 
+  }
   mkldnn_primitive_t internal_output_memory =
       compiled_model_->memories[internal_output_id];
   const_mkldnn_primitive_desc_t internal_output_pd;
-  status = LATE(mkldnn_primitive_get_primitive_desc)
-      (internal_output_memory, &internal_output_pd);
+  status = LATE(mkldnn_primitive_get_primitive_desc)(internal_output_memory,
+                                                     &internal_output_pd);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to get primitive descriptor " << status;
     return mojom::OP_FAILED;
   }
   std::string output_id = internal_output_id + "-reordered";
-  if (!LATE(mkldnn_memory_primitive_desc_equal)(output_pd, internal_output_pd)) {
+  if (!LATE(mkldnn_memory_primitive_desc_equal)(output_pd,
+                                                internal_output_pd)) {
     DLOG(INFO) << "Reorder internal output to output";
     mkldnn_primitive_t output_memory;
-    status = LATE(mkldnn_primitive_create)
-        (&output_memory, output_pd, NULL, NULL);
+    status =
+        LATE(mkldnn_primitive_create)(&output_memory, output_pd, NULL, NULL);
     if (status != mkldnn_success) {
       LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
       LATE(mkldnn_primitive_desc_destroy)(output_pd);
@@ -445,16 +446,18 @@ int32_t CompilationDelegateMklDnn::MkldnnAddReorder(
     return mojom::OP_FAILED;
   }
   mkldnn_primitive_desc_t reorder_pd;
-  status = LATE(mkldnn_reorder_primitive_desc_create)
-      (&reorder_pd, input_pd, output_pd);
+  status = LATE(mkldnn_reorder_primitive_desc_create)(&reorder_pd, input_pd,
+                                                      output_pd);
   if (status != mkldnn_success) {
-    LOG(ERROR) << "[MKLDNN] falied to create reorder primitive descriptor " << status;
+    LOG(ERROR) << "[MKLDNN] falied to create reorder primitive descriptor "
+               << status;
     return mojom::OP_FAILED;
   }
-  mkldnn_primitive_at_t inputs = { input, 0 };
-  const_mkldnn_primitive_t outputs[] = { output };
+  mkldnn_primitive_at_t inputs = {input, 0};
+  const_mkldnn_primitive_t outputs[] = {output};
   mkldnn_primitive_t reorder;
-  status = LATE(mkldnn_primitive_create)(&reorder, reorder_pd, &inputs, outputs);
+  status =
+      LATE(mkldnn_primitive_create)(&reorder, reorder_pd, &inputs, outputs);
   if (status != mkldnn_success) {
     LATE(mkldnn_primitive_desc_destroy)(reorder_pd);
     LOG(ERROR) << "[MKLDNN] failed to create reorder primitive " << status;
@@ -562,15 +565,15 @@ int32_t CompilationDelegateMklDnn::MkldnnAddFusedActivation(
     return mojom::OP_FAILED;
   }
   mkldnn_primitive_desc_t activation_pd;
-  status = LATE(mkldnn_primitive_desc_create)
-      (&activation_pd, &activation_desc, compiled_model_->engine, NULL);
+  status = LATE(mkldnn_primitive_desc_create)(&activation_pd, &activation_desc,
+                                              compiled_model_->engine, NULL);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create primitive descriptor " << status;
     return mojom::OP_FAILED;
   }
   mkldnn_primitive_t output_memory;
-  const_mkldnn_primitive_desc_t output_pd =
-      LATE(mkldnn_primitive_desc_query_pd)(activation_pd, mkldnn_query_dst_pd, 0);
+  const_mkldnn_primitive_desc_t output_pd = LATE(
+      mkldnn_primitive_desc_query_pd)(activation_pd, mkldnn_query_dst_pd, 0);
   status = LATE(mkldnn_primitive_create)(&output_memory, output_pd, NULL, NULL);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
@@ -578,10 +581,11 @@ int32_t CompilationDelegateMklDnn::MkldnnAddFusedActivation(
     return mojom::OP_FAILED;
   }
   size_t buffer_size = LATE(mkldnn_memory_primitive_desc_get_size)(output_pd);
-  void *buffer = base::AlignedAlloc(buffer_size, ALIGNMENT);
+  void* buffer = base::AlignedAlloc(buffer_size, ALIGNMENT);
   status = LATE(mkldnn_memory_set_data_handle)(output_memory, buffer);
   if (status != mkldnn_success) {
-    LOG(ERROR) << "[MKLDNN] failed to set data handle to memory primitive " << status;
+    LOG(ERROR) << "[MKLDNN] failed to set data handle to memory primitive "
+               << status;
     LATE(mkldnn_primitive_desc_destroy)(activation_pd);
     LATE(mkldnn_primitive_destroy)(output_memory);
     base::AlignedFree(buffer);
@@ -591,12 +595,13 @@ int32_t CompilationDelegateMklDnn::MkldnnAddFusedActivation(
 
   mkldnn_primitive_t activation;
   mkldnn_primitive_at_t inputs[] = {LATE(mkldnn_primitive_at)(input_memory, 0)};
-  const_mkldnn_primitive_t outputs[] = { output_memory };
+  const_mkldnn_primitive_t outputs[] = {output_memory};
 
-  status = LATE(mkldnn_primitive_create)
-      (&activation, activation_pd, inputs, outputs);
+  status = LATE(mkldnn_primitive_create)(&activation, activation_pd, inputs,
+                                         outputs);
   if (status != mkldnn_success) {
-    LOG(ERROR) << "[MKLDNN] failed to set data handle to memory primitive " << status;
+    LOG(ERROR) << "[MKLDNN] failed to set data handle to memory primitive "
+               << status;
     LATE(mkldnn_primitive_desc_destroy)(activation_pd);
     return mojom::OP_FAILED;
   }
@@ -634,8 +639,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   // Input logical order is nchw
   int input_dims[4] = {params.input_batch, params.input_channel,
                        params.input_height, params.input_width};
-  status = LATE(mkldnn_memory_desc_init)
-      (&input_desc, 4, input_dims, mkldnn_f32, mkldnn_any);
+  status = LATE(mkldnn_memory_desc_init)(&input_desc, 4, input_dims, mkldnn_f32,
+                                         mkldnn_any);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
     return mojom::OP_FAILED;
@@ -643,16 +648,16 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   mkldnn_memory_desc_t weights_desc;
   if (params.depthwise) {
     // Weights logical order is (g, o, i, h, w)
-    int weights_dims[5] = {params.depth_out, 1, 1,
-                           params.filter_height, params.filter_width};
-    status = LATE(mkldnn_memory_desc_init)
-        (&weights_desc, 5, weights_dims, mkldnn_f32, mkldnn_hwigo);
+    int weights_dims[5] = {params.depth_out, 1, 1, params.filter_height,
+                           params.filter_width};
+    status = LATE(mkldnn_memory_desc_init)(&weights_desc, 5, weights_dims,
+                                           mkldnn_f32, mkldnn_hwigo);
   } else {
     // Weights logical order is oihw
     int weights_dims[4] = {params.depth_out, params.depth_in,
                            params.filter_height, params.filter_width};
-    status = LATE(mkldnn_memory_desc_init)
-        (&weights_desc, 4, weights_dims, mkldnn_f32, mkldnn_any);
+    status = LATE(mkldnn_memory_desc_init)(&weights_desc, 4, weights_dims,
+                                           mkldnn_f32, mkldnn_any);
   }
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
@@ -660,8 +665,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   }
   mkldnn_memory_desc_t bias_desc;
   int bias_dims[1] = {params.bias_length};
-  status = LATE(mkldnn_memory_desc_init)
-      (&bias_desc, 1, bias_dims, mkldnn_f32, mkldnn_x);
+  status = LATE(mkldnn_memory_desc_init)(&bias_desc, 1, bias_dims, mkldnn_f32,
+                                         mkldnn_x);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
     return mojom::OP_FAILED;
@@ -670,8 +675,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   // Output logical order is nchw
   int output_dims[4] = {params.output_batch, params.output_channel,
                         params.output_height, params.output_width};
-  status = LATE(mkldnn_memory_desc_init)
-      (&output_desc, 4, output_dims, mkldnn_f32, mkldnn_any);
+  status = LATE(mkldnn_memory_desc_init)(&output_desc, 4, output_dims,
+                                         mkldnn_f32, mkldnn_any);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init memory descriptor " << status;
     return mojom::OP_FAILED;
@@ -681,10 +686,10 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   int strides[2] = {params.stride_width, params.stride_height};
   int pad_left[2] = {params.padding_top, params.padding_left};
   int pad_right[2] = {params.padding_bottom, params.padding_right};
-  status = LATE(mkldnn_convolution_forward_desc_init)
-      (&conv_desc, mkldnn_forward, mkldnn_convolution_direct, 
-       &input_desc, &weights_desc, &bias_desc, &output_desc,
-       strides, pad_left, pad_right, mkldnn_padding_zero);
+  status = LATE(mkldnn_convolution_forward_desc_init)(
+      &conv_desc, mkldnn_forward, mkldnn_convolution_direct, &input_desc,
+      &weights_desc, &bias_desc, &output_desc, strides, pad_left, pad_right,
+      mkldnn_padding_zero);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to init convolution descriptor " << status;
     return mojom::OP_FAILED;
@@ -693,11 +698,12 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
 
   mkldnn_primitive_desc_t conv_pd;
   if (params.fuse_code == mojom::FUSED_NONE || params.depthwise) {
-    status = LATE(mkldnn_primitive_desc_create)
-        (&conv_pd, &conv_desc, compiled_model_->engine, NULL);
+    status = LATE(mkldnn_primitive_desc_create)(&conv_pd, &conv_desc,
+                                                compiled_model_->engine, NULL);
     if (status != mkldnn_success) {
-      LOG(ERROR) << "[MKLDNN] failed to create convolution primitive descriptor "
-                << status;
+      LOG(ERROR)
+          << "[MKLDNN] failed to create convolution primitive descriptor "
+          << status;
       return mojom::OP_FAILED;
     }
   } else {
@@ -715,13 +721,13 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
       return mojom::OP_FAILED;
     }
     if (params.fuse_code == mojom::FUSED_RELU) {
-      status = LATE(mkldnn_post_ops_append_eltwise)
-          (post_ops, 1.0, mkldnn_eltwise_relu, 0, 0);
+      status = LATE(mkldnn_post_ops_append_eltwise)(post_ops, 1.0,
+                                                    mkldnn_eltwise_relu, 0, 0);
     } else if (params.fuse_code == mojom::FUSED_RELU1 ||
                params.fuse_code == mojom::FUSED_RELU6) {
       float uppper_bound = params.fuse_code == mojom::FUSED_RELU1 ? 1.0 : 6.0;
-      status = LATE(mkldnn_post_ops_append_eltwise)
-          (post_ops, 1.0, mkldnn_eltwise_bounded_relu, uppper_bound, 0);
+      status = LATE(mkldnn_post_ops_append_eltwise)(
+          post_ops, 1.0, mkldnn_eltwise_bounded_relu, uppper_bound, 0);
     } else {
       LOG(ERROR) << "[MKLDNN] fuse code " << params.fuse_code
                  << " is not supproted.";
@@ -741,17 +747,18 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
                  << status;
       return mojom::OP_FAILED;
     }
-    status = LATE(mkldnn_primitive_desc_create_v2)
-        (&conv_pd, &conv_desc, attr, compiled_model_->engine, NULL);
+    status = LATE(mkldnn_primitive_desc_create_v2)(
+        &conv_pd, &conv_desc, attr, compiled_model_->engine, NULL);
     if (status != mkldnn_success) {
-      LOG(ERROR) << "[MKLDNN] failed to create convolution primitive descriptor "
-                << status;
+      LOG(ERROR)
+          << "[MKLDNN] failed to create convolution primitive descriptor "
+          << status;
       return mojom::OP_FAILED;
     }
     LATE(mkldnn_post_ops_destroy)(post_ops);
     LATE(mkldnn_primitive_attr_destroy)(attr);
   }
-  
+
   DLOG(INFO) << "[MKLDNN] succeed to create convolution primitive descriptor";
 
   DLOG(INFO) << "Add input memory";
@@ -761,12 +768,12 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
     LOG(ERROR) << "Input memory is not ready";
     LATE(mkldnn_primitive_desc_destroy)(conv_pd);
     return mojom::BAD_DATA;
-  } 
+  }
   mkldnn_primitive_t external_input_memory =
       compiled_model_->memories[external_input_id];
   const_mkldnn_primitive_desc_t external_input_pd;
-  status = LATE(mkldnn_primitive_get_primitive_desc)
-      (external_input_memory, &external_input_pd);
+  status = LATE(mkldnn_primitive_get_primitive_desc)(external_input_memory,
+                                                     &external_input_pd);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to get primitive descriptor " << status;
     LATE(mkldnn_primitive_desc_destroy)(conv_pd);
@@ -777,8 +784,7 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
       LATE(mkldnn_primitive_desc_query_pd)(conv_pd, mkldnn_query_src_pd, 0);
   if (!LATE(mkldnn_memory_primitive_desc_equal)(input_pd, external_input_pd)) {
     DLOG(INFO) << "Reorder external input to input";
-    status = LATE(mkldnn_primitive_create)
-        (&input_memory, input_pd, NULL, NULL);
+    status = LATE(mkldnn_primitive_create)(&input_memory, input_pd, NULL, NULL);
     if (status != mkldnn_success) {
       LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
       LATE(mkldnn_primitive_desc_destroy)(conv_pd);
@@ -827,8 +833,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   mkldnn_primitive_t external_weights_memory =
       compiled_model_->memories[external_weights_id];
   const_mkldnn_primitive_desc_t external_weights_pd;
-  status = LATE(mkldnn_primitive_get_primitive_desc)
-      (external_weights_memory, &external_weights_pd);
+  status = LATE(mkldnn_primitive_get_primitive_desc)(external_weights_memory,
+                                                     &external_weights_pd);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to get primitive descriptor " << status;
     LATE(mkldnn_primitive_desc_destroy)(conv_pd);
@@ -837,11 +843,11 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   mkldnn_primitive_t weights_memory;
   const_mkldnn_primitive_desc_t weights_pd =
       LATE(mkldnn_primitive_desc_query_pd)(conv_pd, mkldnn_query_weights_pd, 0);
-  if (!LATE(mkldnn_memory_primitive_desc_equal)(
-      weights_pd, external_weights_pd)) {
+  if (!LATE(mkldnn_memory_primitive_desc_equal)(weights_pd,
+                                                external_weights_pd)) {
     DLOG(INFO) << "Reorder external weigths to weights";
-    status = LATE(mkldnn_primitive_create)
-        (&weights_memory, weights_pd, NULL, NULL);
+    status =
+        LATE(mkldnn_primitive_create)(&weights_memory, weights_pd, NULL, NULL);
     if (status != mkldnn_success) {
       LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
       return mojom::OP_FAILED;
@@ -849,8 +855,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
     size_t weights_size =
         LATE(mkldnn_memory_primitive_desc_get_size)(weights_pd);
     void* weights_buffer = base::AlignedAlloc(weights_size, ALIGNMENT);
-    status = LATE(mkldnn_memory_set_data_handle)
-        (weights_memory, weights_buffer);
+    status =
+        LATE(mkldnn_memory_set_data_handle)(weights_memory, weights_buffer);
     if (status != mkldnn_success) {
       LOG(ERROR) << "[MKLDNN] failed to set data handle " << status;
       LATE(mkldnn_primitive_desc_destroy)(conv_pd);
@@ -858,7 +864,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
       base::AlignedFree(weights_buffer);
       return mojom::OP_FAILED;
     }
-    DLOG(INFO) << "[MKLDNN] succeed to set data handle with size " << weights_size;
+    DLOG(INFO) << "[MKLDNN] succeed to set data handle with size "
+               << weights_size;
     std::string weights_id = external_weights_id + "-reordered";
     compiled_model_->memories[weights_id] = weights_memory;
     DLOG(INFO) << "[MKLDNN] succeed to create memory primitve for "
@@ -886,15 +893,14 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   mkldnn_primitive_t output_memory;
   const_mkldnn_primitive_desc_t output_pd =
       LATE(mkldnn_primitive_desc_query_pd)(conv_pd, mkldnn_query_dst_pd, 0);
-  status = LATE(mkldnn_primitive_create)
-      (&output_memory, output_pd, NULL, NULL);
+  status = LATE(mkldnn_primitive_create)(&output_memory, output_pd, NULL, NULL);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to create memory primitive " << status;
     LATE(mkldnn_primitive_desc_destroy)(conv_pd);
     return mojom::OP_FAILED;
   }
   size_t output_size = LATE(mkldnn_memory_primitive_desc_get_size)(output_pd);
-  void *output_buffer = base::AlignedAlloc(output_size, ALIGNMENT);
+  void* output_buffer = base::AlignedAlloc(output_size, ALIGNMENT);
   status = LATE(mkldnn_memory_set_data_handle)(output_memory, output_buffer);
   if (status != mkldnn_success) {
     LOG(ERROR) << "[MKLDNN] failed to set data handle " << status;
@@ -916,11 +922,10 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
              << conv_output_id;
 
   mkldnn_primitive_at_t conv_srcs[] = {
-    LATE(mkldnn_primitive_at)(input_memory, 0),
-    LATE(mkldnn_primitive_at)(weights_memory, 0),
-    LATE(mkldnn_primitive_at)(bias_memory, 0)
-  };
-  const_mkldnn_primitive_t conv_dsts[] = { output_memory };
+      LATE(mkldnn_primitive_at)(input_memory, 0),
+      LATE(mkldnn_primitive_at)(weights_memory, 0),
+      LATE(mkldnn_primitive_at)(bias_memory, 0)};
+  const_mkldnn_primitive_t conv_dsts[] = {output_memory};
 
   mkldnn_primitive_t conv;
   status = LATE(mkldnn_primitive_create)(&conv, conv_pd, conv_srcs, conv_dsts);
@@ -939,8 +944,8 @@ int32_t CompilationDelegateMklDnn::MkldnnAddConvolution(
   if (params.depthwise && params.fuse_code != mojom::FUSED_NONE) {
     // Append an activation primitive that uses conv's output memory as input
     // and output is named as output_id.
-    result = MkldnnAddFusedActivation(
-        conv_output_id, output_id, params.fuse_code);
+    result =
+        MkldnnAddFusedActivation(conv_output_id, output_id, params.fuse_code);
     if (result != mojom::NOT_ERROR)
       return result;
   }
