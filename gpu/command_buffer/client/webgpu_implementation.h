@@ -117,6 +117,8 @@ class WEBGPU_EXPORT WebGPUImplementation final
   void FlushCommands() override;
   DawnDevice GetDefaultDevice() override;
   ReservedTexture ReserveTexture(DawnDevice device) override;
+  uint32_t GetId(DawnDevice device) override;
+  uint32_t GetId(DawnBuffer buffer) override;
 
  private:
   const char* GetLogPrefix() const { return "webgpu"; }

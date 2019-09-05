@@ -325,5 +325,23 @@ ReservedTexture WebGPUImplementation::ReserveTexture(DawnDevice device) {
 #endif
 }
 
+uint32_t WebGPUImplementation::GetId(DawnDevice device) {
+#if BUILDFLAG(USE_DAWN)
+  return wire_client_->GetId(device);
+#else
+  NOTREACHED();
+  return 0;
+#endif
+}
+
+uint32_t WebGPUImplementation::GetId(DawnBuffer buffer) {
+#if BUILDFLAG(USE_DAWN)
+  return wire_client_->GetId(buffer);
+#else
+  NOTREACHED();
+  return 0;
+#endif
+}
+
 }  // namespace webgpu
 }  // namespace gpu

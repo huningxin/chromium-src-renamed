@@ -23,6 +23,8 @@
 
 namespace blink {
 
+class GPUBuffer;
+
 struct OperandInfo {
   OperandInfo(uint32_t offset,
               uint32_t length,
@@ -42,6 +44,8 @@ class Execution final : public ScriptWrappable {
 
   void setInput(uint32_t, MaybeShared<DOMArrayBufferView>, ExceptionState&);
   void setOutput(uint32_t, MaybeShared<DOMArrayBufferView>, ExceptionState&);
+  void setInputGPUBuffer(uint32_t, GPUBuffer* buffer, ExceptionState&);
+  void setOutputGPUBuffer(uint32_t, GPUBuffer* buffer, ExceptionState&);
   ScriptPromise startCompute(ScriptState*);
 
   void Trace(blink::Visitor*) override;

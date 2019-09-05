@@ -12,6 +12,10 @@
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
+#include "third_party/blink/renderer/modules/webgpu/dawn_conversions.h"
+#include "third_party/blink/renderer/modules/webgpu/gpu_buffer.h"
+#include "gpu/command_buffer/client/webgpu_interface.h"
+
 namespace blink {
 
 namespace {
@@ -116,6 +120,40 @@ void Execution::setOutput(uint32_t index,
   }
 
   output_buffer_views_[index] = data.View();
+}
+
+void Execution::setInputGPUBuffer(uint32_t index, GPUBuffer* buffer, ExceptionState& exception_state) {
+  if (index >= inputs_.size()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "Invalid index");
+    return;
+  }
+
+  std::unique_ptr<OperandInfo>& info = inputs_.at(index);
+  DLOG(INFO) << "required input buffer length: " << info->length;
+
+  DawnBuffer dawn_buffer = buffer->GetHandle();
+  uint32_t id = buffer->GetInterface()->GetId(dawn_buffer);
+  DLOG(INFO) << "input dawn buffer: " << dawn_buffer << " id: " << id;
+
+  return;
+}
+
+void Execution::setOutputGPUBuffer(uint32_t index, GPUBuffer* buffer, ExceptionState& exception_state) {
+  if (index >= output_buffer_views_.size()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "Invalid index");
+    return;
+  }
+
+  std::unique_ptr<OperandInfo>& info = outputs_.at(index);
+  DLOG(INFO) << "required output buffer length: " << info->length;
+
+  DawnBuffer dawn_buffer = buffer->GetHandle();
+  uint32_t id = buffer->GetInterface()->GetId(dawn_buffer);
+  DLOG(INFO) << "output dawn buffer: " << dawn_buffer << " id: " << id;
+
+  return;
 }
 
 ScriptPromise Execution::startCompute(ScriptState* script_state) {
