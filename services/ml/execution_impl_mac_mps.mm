@@ -184,12 +184,12 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
           MPSImage* mps_img = input_mpsimages_[i].get();
           if (i < gpu_buffers->inputs.size()) {
             uint32_t buffer_id = gpu_buffers->inputs[i];
-            DLOG(INFO) << "dawn buffer id: " << buffer_id;
+            DLOG(INFO) << "input dawn buffer id: " << buffer_id;
             DawnBuffer dawn_buffer;
             dawn_wire_server->GetFromId(buffer_id, &dawn_buffer);
-            DLOG(INFO) << "dawn buffer: " << dawn_buffer;
+            DLOG(INFO) << "input dawn buffer: " << dawn_buffer;
             const id<MTLBuffer> mtl_buffer = dawn_native::metal::GetMetalBuffer(dawn_buffer);
-            DLOG(INFO) << "mtl buffer: " << mtl_buffer;
+            DLOG(INFO) << "input mtl buffer: " << mtl_buffer;
             CopyMTLBufferToMPSImage(mps_img, mtl_buffer, command_buffer);
           } else {
             const id<MTLBuffer> mtl_buffer = input_mtlbuffers_[i];
@@ -267,7 +267,18 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
 
         for (size_t i = 0; i < compilation_->outputs_.size(); ++i) {
           MPSImage* output_img = output_mps_images[compilation_->outputs_[i]];
-          id<MTLBuffer> output_buffer = output_mtlbuffers_[i];
+          id<MTLBuffer> output_buffer;
+          if (i < gpu_buffers->outputs.size()) {
+            uint32_t buffer_id = gpu_buffers->outputs[i];
+            DLOG(INFO) << "output dawn buffer id: " << buffer_id;
+            DawnBuffer dawn_buffer;
+            dawn_wire_server->GetFromId(buffer_id, &dawn_buffer);
+            DLOG(INFO) << "output dawn buffer: " << dawn_buffer;
+            output_buffer = dawn_native::metal::GetMetalBuffer(dawn_buffer);
+            DLOG(INFO) << "output mtl buffer: " << output_buffer;
+          } else {
+            output_buffer = output_mtlbuffers_[i];
+          }
 
           id<MTLComputeCommandEncoder> encoder =
               [command_buffer computeCommandEncoder];
@@ -294,10 +305,12 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
         [command_buffer waitUntilCompleted];
 
         for (size_t i = 0; i < compilation_->outputs_.size(); ++i) {
-          std::unique_ptr<OperandInfo>& output_data = outputs_info_[i];
-          id<MTLBuffer> output_buffer = output_mtlbuffers_[i];
-          memcpy(output_data->mapping.get(), [output_buffer contents],
-                 output_data -> length);
+          if (i >= gpu_buffers->outputs.size()) {
+            std::unique_ptr<OperandInfo>& output_data = outputs_info_[i];
+            id<MTLBuffer> output_buffer = output_mtlbuffers_[i];
+            memcpy(output_data->mapping.get(), [output_buffer contents],
+                   output_data -> length);
+          }
         }
       }  // @autoreleasepool
     } while (0);
