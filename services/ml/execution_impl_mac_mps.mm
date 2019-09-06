@@ -14,6 +14,11 @@
 #include "services/ml/mpscnn_context.h"
 #include "services/ml/public/mojom/constants.mojom.h"
 
+#include <dawn_native/DawnNative.h>
+#include <dawn_platform/DawnPlatform.h>
+#include <dawn_wire/WireServer.h>
+#include <dawn_native/MetalBackend.h>
+
 namespace ml {
 
 namespace {
@@ -158,8 +163,13 @@ void ExecutionImplMacMPS::CreateOutputMTLBuffer() {
   }
 }
 
-void ExecutionImplMacMPS::StartCompute(StartComputeCallback callback) {
+void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, StartComputeCallback callback) {
   DLOG(INFO) << "ExecutionImplMac::StartCompute";
+  dawn_wire::WireServer *dawn_wire_server = dawn_wire::WireServer::GetInstance();
+  DLOG(INFO) << "dawn wire server: " << dawn_wire_server;
+  // DawnBuffer buffer;
+  // dawn_wire_server->GetFromId(3, &buffer);
+  // DLOG(INFO) << "dawn buffer: " << buffer;
   bool success = true;
   if (@available(macOS 10.13, *)) {
     do {
@@ -172,9 +182,20 @@ void ExecutionImplMacMPS::StartCompute(StartComputeCallback callback) {
         for (size_t i = 0; i < compilation_->inputs_.size(); ++i) {
           std::unique_ptr<OperandInfo>& input_data = inputs_info_[i];
           MPSImage* mps_img = input_mpsimages_[i].get();
-          const id<MTLBuffer> mtl_buffer = input_mtlbuffers_[i];
-          UploadToMPSImage(mps_img, mtl_buffer, command_buffer,
-                           input_data->mapping.get(), input_data->length);
+          if (i < gpu_buffers->inputs.size()) {
+            uint32_t buffer_id = gpu_buffers->inputs[i];
+            DLOG(INFO) << "dawn buffer id: " << buffer_id;
+            DawnBuffer dawn_buffer;
+            dawn_wire_server->GetFromId(buffer_id, &dawn_buffer);
+            DLOG(INFO) << "dawn buffer: " << dawn_buffer;
+            const id<MTLBuffer> mtl_buffer = dawn_native::metal::GetMetalBuffer(dawn_buffer);
+            DLOG(INFO) << "mtl buffer: " << mtl_buffer;
+            CopyMTLBufferToMPSImage(mps_img, mtl_buffer, command_buffer);
+          } else {
+            const id<MTLBuffer> mtl_buffer = input_mtlbuffers_[i];
+            UploadToMPSImage(mps_img, mtl_buffer, command_buffer,
+                             input_data->mapping.get(), input_data->length);
+          }
           [image_array addObject:mps_img];
         }
 
@@ -297,6 +318,30 @@ void ExecutionImplMacMPS::UploadToMPSImage(
     size_t length) {
   if (@available(macOS 10.13, *)) {
     memcpy([mtl_buffer contents], cpu_buffer, length);
+    id<MTLComputeCommandEncoder> encoder =
+        [command_buffer computeCommandEncoder];
+    id<MTLComputePipelineState> state =
+        GetMPSCNNContext().GetSpecializedPipelineState(
+            KernelFor(mps_image, @"copy_nhwc_to_metal",
+                      @"copy_nhwc_to_metal_nonarray"),
+            {{ushort(mps_image.height), ushort(mps_image.width),
+              ushort(mps_image.featureChannels)}});
+    [encoder setComputePipelineState:state];
+    [encoder setBuffer:mtl_buffer offset:0 atIndex:0];
+    [encoder setTexture:[mps_image texture] atIndex:0];
+    const auto& inputLaunchParams =
+        SpatialPointwiseKernelLaunchParams(state, mps_image);
+    [encoder dispatchThreadgroups:inputLaunchParams.threadgroupsPerGrid
+            threadsPerThreadgroup:inputLaunchParams.threadsPerThreadgroup];
+    [encoder endEncoding];
+  }
+}
+
+void ExecutionImplMacMPS::CopyMTLBufferToMPSImage(
+    const MPSImage* mps_image,
+    const id<MTLBuffer>& mtl_buffer,
+    const id<MTLCommandBuffer>& command_buffer) {
+  if (@available(macOS 10.13, *)) {
     id<MTLComputeCommandEncoder> encoder =
         [command_buffer computeCommandEncoder];
     id<MTLComputePipelineState> state =

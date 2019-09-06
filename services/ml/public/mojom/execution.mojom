@@ -4,7 +4,12 @@
 
 module ml.mojom;
 
+struct GpuBufferInfo {
+  array<uint32> inputs;
+  array<uint32> outputs;
+};
+
 interface Execution {
-  StartCompute()
+  StartCompute(GpuBufferInfo gpu_buffers)
     => (int32 resultCode);
 };

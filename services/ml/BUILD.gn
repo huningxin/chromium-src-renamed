@@ -226,6 +226,9 @@ source_set("lib") {
   deps = [
     "//mojo/public/cpp/bindings",
     "//skia",
+    "//third_party/dawn/src/dawn:dawn_headers",
+    "//third_party/dawn:libdawn_native",
+    "//third_party/dawn:libdawn_wire",
   ]
 
   if (is_win || is_linux) {

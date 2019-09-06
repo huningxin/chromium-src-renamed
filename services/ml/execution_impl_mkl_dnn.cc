@@ -19,7 +19,7 @@ ExecutionImplMklDnn::ExecutionImplMklDnn(
 
 ExecutionImplMklDnn::~ExecutionImplMklDnn() {}
 
-void ExecutionImplMklDnn::StartCompute(StartComputeCallback callback) {
+void ExecutionImplMklDnn::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, StartComputeCallback callback) {
   DLOG(INFO) << "ExecutionImplMklDnn::StartCompute";
   mkldnn_status_t status;
   uint32_t total_length = 0;

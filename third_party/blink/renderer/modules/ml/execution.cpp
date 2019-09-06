@@ -77,6 +77,10 @@ Execution::Execution(ml::mojom::blink::ExecutionInitParamsPtr init_params) {
   }
 
   output_buffer_views_.resize(init_params->outputs.size());
+
+  gpu_buffer_info_ = ml::mojom::blink::GpuBufferInfo::New();
+  gpu_buffer_info_->inputs.resize(init_params->inputs.size());
+  gpu_buffer_info_->outputs.resize(init_params->outputs.size());
 }
 
 Execution::~Execution() = default;
@@ -136,6 +140,8 @@ void Execution::setInputGPUBuffer(uint32_t index, GPUBuffer* buffer, ExceptionSt
   uint32_t id = buffer->GetInterface()->GetId(dawn_buffer);
   DLOG(INFO) << "input dawn buffer: " << dawn_buffer << " id: " << id;
 
+  gpu_buffer_info_->inputs[index] = id;
+
   return;
 }
 
@@ -153,6 +159,8 @@ void Execution::setOutputGPUBuffer(uint32_t index, GPUBuffer* buffer, ExceptionS
   uint32_t id = buffer->GetInterface()->GetId(dawn_buffer);
   DLOG(INFO) << "output dawn buffer: " << dawn_buffer << " id: " << id;
 
+  gpu_buffer_info_->outputs[index] = id;
+
   return;
 }
 
@@ -168,7 +176,8 @@ ScriptPromise Execution::startCompute(ScriptState* script_state) {
 
   requests_.insert(resolver);
 
-  execution_->StartCompute(WTF::Bind(&Execution::OnStartCompute,
+  execution_->StartCompute(std::move(gpu_buffer_info_),
+                           WTF::Bind(&Execution::OnStartCompute,
                                      WrapPersistent(this),
                                      WrapPersistent(resolver)));
   return promise;

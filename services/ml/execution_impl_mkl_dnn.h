@@ -26,7 +26,7 @@ class ExecutionImplMklDnn : public mojom::Execution {
                       mojom::ExecutionInitParamsPtr params);
   ~ExecutionImplMklDnn() override;
 
-  void StartCompute(StartComputeCallback callback) override;
+  void StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, StartComputeCallback callback) override;
 
  private:
   int32_t MkldnnExecuteNet(std::vector<mkldnn_primitive_t>&);

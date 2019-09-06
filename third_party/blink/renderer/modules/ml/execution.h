@@ -64,6 +64,8 @@ class Execution final : public ScriptWrappable {
   std::map<uint32_t, mojo::ScopedSharedBufferHandle> input_shared_buffers_;
   std::map<uint32_t, mojo::ScopedSharedBufferHandle> output_shared_buffers_;
   HeapVector<Member<DOMArrayBufferView>> output_buffer_views_;
+
+  ml::mojom::blink::GpuBufferInfoPtr gpu_buffer_info_;
 };
 
 }  // namespace blink

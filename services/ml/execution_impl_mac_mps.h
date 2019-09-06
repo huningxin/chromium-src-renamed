@@ -31,7 +31,7 @@ class ExecutionImplMacMPS : public mojom::Execution {
                       mojo::ScopedSharedBufferHandle);
   ~ExecutionImplMacMPS() override;
 
-  void StartCompute(StartComputeCallback callback) override;
+  void StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, StartComputeCallback callback) override;
 
   bool IsValid() const;
 
@@ -47,6 +47,9 @@ class ExecutionImplMacMPS : public mojom::Execution {
                                                     const id<MTLCommandBuffer>&,
                                                     const void*,
                                                     size_t);
+  void API_AVAILABLE(macos(10_13)) CopyMTLBufferToMPSImage(const MPSImage*,
+                                                           const id<MTLBuffer>&,
+                                                           const id<MTLCommandBuffer>&);
 
   base::WeakPtr<CompilationImplMac> compilation_;
 

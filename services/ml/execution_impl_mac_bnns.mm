@@ -120,7 +120,7 @@ bool ExecutionImplMacBNNS::PrepareBnnsOperandsMemory() {
   return true;
 }
 
-void ExecutionImplMacBNNS::StartCompute(StartComputeCallback callback) {
+void ExecutionImplMacBNNS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, StartComputeCallback callback) {
   DLOG(INFO) << "ExecutionImplMacBNNS::StartCompute";
   bool success = true;
   if (@available(macOS 10.13, *)) {
