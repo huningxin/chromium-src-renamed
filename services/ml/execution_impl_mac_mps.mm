@@ -167,9 +167,9 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
   DLOG(INFO) << "ExecutionImplMac::StartCompute";
   dawn_wire::WireServer *dawn_wire_server = dawn_wire::WireServer::GetInstance();
   DLOG(INFO) << "dawn wire server: " << dawn_wire_server;
-  // DawnBuffer buffer;
-  // dawn_wire_server->GetFromId(3, &buffer);
-  // DLOG(INFO) << "dawn buffer: " << buffer;
+  DawnDevice dawn_device = dawn_wire_server->GetDevice();
+  DLOG(INFO) << "dawn device: " << dawn_device;
+  dawn_native::metal::Tick(dawn_device);
   bool success = true;
   if (@available(macOS 10.13, *)) {
     do {
