@@ -107,6 +107,12 @@ ExecutionImplMacMPS::ExecutionImplMacMPS(
                               compilation_->outputs_, memory, mapped_length);
 
   if (@available(macOS 10.13, *)) {
+    dawn_wire::WireServer *dawn_wire_server = dawn_wire::WireServer::GetInstance();
+    DLOG(INFO) << "dawn wire server: " << dawn_wire_server;
+    DawnDevice dawn_device = dawn_wire_server->GetDevice();
+    DLOG(INFO) << "dawn device: " << dawn_device;
+    mtl_device_ = dawn_native::metal::GetMetalDevice(dawn_device);
+    DLOG(INFO) << "mtl_device_: " << mtl_device_;
     SetupMPSImageForOperands(input_mpsimages_, input_mtlbuffers_,
                              compilation_->inputs_);
     SetupMPSImageForOperands(constant_mpsimages_, constant_mtlbuffers_,
@@ -142,10 +148,10 @@ void API_AVAILABLE(macosx(10.13)) ExecutionImplMacMPS::SetupMPSImageForOperands(
       if (!descriptor)
         return;
       base::scoped_nsobject<MPSImage> mps_img([[MPSImage alloc]
-           initWithDevice:GetMPSCNNContext().device
+           initWithDevice:mtl_device_
           imageDescriptor:descriptor]);
       mps_image_array.push_back(std::move(mps_img));
-      mtl_buffer_array.push_back([GetMPSCNNContext().device
+      mtl_buffer_array.push_back([mtl_device_
           newBufferWithLength:operand.requiredSize()
                       options:MTLResourceOptionCPUCacheModeWriteCombined]);
     }
@@ -168,14 +174,19 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
   dawn_wire::WireServer *dawn_wire_server = dawn_wire::WireServer::GetInstance();
   DLOG(INFO) << "dawn wire server: " << dawn_wire_server;
   DawnDevice dawn_device = dawn_wire_server->GetDevice();
-  DLOG(INFO) << "dawn device: " << dawn_device;
-  dawn_native::metal::Tick(dawn_device);
+  // dawn_native::metal::Tick(dawn_device);
   bool success = true;
   if (@available(macOS 10.13, *)) {
     do {
       @autoreleasepool {
-        id<MTLCommandBuffer> command_buffer =
-            [GetMPSCNNContext().command_queue commandBuffer];
+        id<MTLCommandBuffer> command_buffer;
+        if (gpu_buffers->inputs.size() > 0) {
+          id<MTLCommandQueue> command_queue = dawn_native::metal::GetMetalCommandQueue(dawn_device);
+          DLOG(INFO) << "mtl command queue: " << command_queue;
+          command_buffer = [command_queue commandBuffer];
+        } else {
+          command_buffer = [GetMPSCNNContext().command_queue commandBuffer];
+        }
 
         NSMutableArray<MPSImage*>* image_array =
             [NSMutableArray arrayWithCapacity:1];
@@ -283,11 +294,12 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
           id<MTLComputeCommandEncoder> encoder =
               [command_buffer computeCommandEncoder];
           id<MTLComputePipelineState> state =
-              GetMPSCNNContext().GetSpecializedPipelineState(
+              GetMPSCNNContext().GetSpecializedPipelineStateForDevice(
                   KernelFor(output_img, @"copy_metal_to_nhwc",
                             @"copy_metal_to_nhwc_nonarray"),
                   {{ushort(output_img.height), ushort(output_img.width),
-                    ushort(output_img.featureChannels)}});
+                    ushort(output_img.featureChannels)}},
+                  mtl_device_);
 
           [encoder setComputePipelineState:state];
           [encoder setBuffer:output_buffer offset:0 atIndex:0];
@@ -302,7 +314,7 @@ void ExecutionImplMacMPS::StartCompute(mojom::GpuBufferInfoPtr gpu_buffers, Star
         }
 
         [command_buffer commit];
-        [command_buffer waitUntilCompleted];
+        // [command_buffer waitUntilCompleted];
 
         for (size_t i = 0; i < compilation_->outputs_.size(); ++i) {
           if (i >= gpu_buffers->outputs.size()) {
@@ -358,11 +370,12 @@ void ExecutionImplMacMPS::CopyMTLBufferToMPSImage(
     id<MTLComputeCommandEncoder> encoder =
         [command_buffer computeCommandEncoder];
     id<MTLComputePipelineState> state =
-        GetMPSCNNContext().GetSpecializedPipelineState(
+        GetMPSCNNContext().GetSpecializedPipelineStateForDevice(
             KernelFor(mps_image, @"copy_nhwc_to_metal",
                       @"copy_nhwc_to_metal_nonarray"),
             {{ushort(mps_image.height), ushort(mps_image.width),
-              ushort(mps_image.featureChannels)}});
+              ushort(mps_image.featureChannels)}},
+            mtl_device_);
     [encoder setComputePipelineState:state];
     [encoder setBuffer:mtl_buffer offset:0 atIndex:0];
     [encoder setTexture:[mps_image texture] atIndex:0];

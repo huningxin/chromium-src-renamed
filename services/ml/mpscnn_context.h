@@ -33,6 +33,10 @@ struct API_AVAILABLE(macosx(10.13)) MPSCNNContext {
   id<MTLComputePipelineState> GetSpecializedPipelineState(
       NSString* kernel,
       const std::vector<ushort>& constants);
+  id<MTLComputePipelineState> GetSpecializedPipelineStateForDevice(
+    NSString* kernel,
+    const std::vector<ushort>& constants,
+    id<MTLDevice>& mtl_device);
 
  private:
   std::unordered_map<std::string, id<MTLComputePipelineState>> pipelineCache_;

@@ -64,6 +64,9 @@ class ExecutionImplMacMPS : public mojom::Execution {
   std::vector<base::scoped_nsobject<MPSImage>> constant_mpsimages_;
   API_AVAILABLE(macos(10_13)) std::vector<id<MTLBuffer>> constant_mtlbuffers_;
 
+  API_AVAILABLE(macos(10_13)) id<MTLDevice> mtl_device_;
+
+
   DISALLOW_COPY_AND_ASSIGN(ExecutionImplMacMPS);
 };
 

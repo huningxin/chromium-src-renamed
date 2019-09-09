@@ -238,4 +238,44 @@ id<MTLComputePipelineState> MPSCNNContext::GetSpecializedPipelineState(
   return state;
 }
 
+id<MTLComputePipelineState> MPSCNNContext::GetSpecializedPipelineStateForDevice(
+    NSString* kernel,
+    const std::vector<ushort>& constants,
+    id<MTLDevice>& mtl_device) {
+  std::string kernelStr = std::string([kernel UTF8String]);
+  for (size_t i = 0; i < constants.size(); ++i) {
+    kernelStr += "_" + std::to_string(constants[i]);
+  }
+  if (pipelineCache_.find(kernelStr) != pipelineCache_.end()) {
+    DLOG(INFO) << "Hit in pipeline cache for: " << kernelStr;
+    return pipelineCache_[kernelStr];
+  }
+  MTLFunctionConstantValues* constantValues = [MTLFunctionConstantValues new];
+  for (size_t i = 0; i < constants.size(); ++i) {
+    [constantValues setConstantValue:&constants[i]
+                                type:MTLDataTypeUShort
+                             atIndex:i];
+  }
+  NSError* errors;
+
+  DLOG(INFO) << "Miss in pipeline cache for: " << kernelStr;
+  id<MTLFunction> func = [library newFunctionWithName:kernel
+                                       constantValues:constantValues
+                                                error:&errors];
+  if (!func) {
+    DLOG(ERROR) << "Couldn't get function: " << kernelStr
+                << " error: " << [[errors localizedDescription] UTF8String];
+    return nullptr;
+  }
+  id<MTLComputePipelineState> state =
+      [mtl_device newComputePipelineStateWithFunction:func error:&errors];
+  if (!state) {
+    DLOG(ERROR) << "Couldn't get function: " << kernelStr
+                << " error: " << [[errors localizedDescription] UTF8String];
+    return nullptr;
+  }
+  pipelineCache_[kernelStr] = state;
+  return state;
+}
+
 }
