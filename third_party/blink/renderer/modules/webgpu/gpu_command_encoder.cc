@@ -21,6 +21,8 @@
 #include "third_party/blink/renderer/modules/webgpu/gpu_texture_copy_view.h"
 #include "third_party/blink/renderer/modules/webgpu/gpu_texture_view.h"
 
+#include "third_party/blink/renderer/modules/ml/execution.h"
+
 namespace blink {
 
 DawnRenderPassColorAttachmentDescriptor AsDawnType(
@@ -213,6 +215,27 @@ GPURenderPassEncoder* GPUCommandEncoder::beginRenderPass(
 GPUComputePassEncoder* GPUCommandEncoder::beginComputePass() {
   return GPUComputePassEncoder::Create(
       device_, GetProcs().commandEncoderBeginComputePass(GetHandle(), nullptr));
+}
+
+void GPUCommandEncoder::setNnGraphInput(GPUBuffer* buffer,
+                                        uint32_t index,
+                                        Execution* graph) {
+  DCHECK(buffer);
+  // TODO: get graph id
+  GetProcs().commandEncoderSetNnGraphInput(GetHandle(), buffer->GetHandle(), index, 0);
+}
+
+void GPUCommandEncoder::setNnGraphOutput(GPUBuffer* buffer,
+                                         uint32_t index,
+                                         Execution* graph) {
+  DCHECK(buffer);
+  // TODO: get graph id
+  GetProcs().commandEncoderSetNnGraphOutput(GetHandle(), buffer->GetHandle(), index, 0);
+}
+
+void GPUCommandEncoder::executeNnGraph(Execution* graph) {
+  // TODO: get graph id
+  GetProcs().commandEncoderExecuteNnGraph(GetHandle(), 0);
 }
 
 void GPUCommandEncoder::copyBufferToBuffer(GPUBuffer* src,

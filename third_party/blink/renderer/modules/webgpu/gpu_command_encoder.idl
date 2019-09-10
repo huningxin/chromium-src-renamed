@@ -10,6 +10,20 @@
     GPURenderPassEncoder beginRenderPass(GPURenderPassDescriptor descriptor);
     GPUComputePassEncoder beginComputePass();
 
+    void setNnGraphInput(
+        GPUBuffer buffer,
+        unsigned long index,
+        Execution graph
+    );
+
+    void setNnGraphOutput(
+        GPUBuffer buffer,
+        unsigned long index,
+        Execution graph
+    );
+
+    void executeNnGraph(Execution graph);
+
     void copyBufferToBuffer(
         GPUBuffer src, unsigned long long srcOffset,
         GPUBuffer dst, unsigned long long dstOffset,

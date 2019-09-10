@@ -19,6 +19,8 @@ class GPURenderPassDescriptor;
 class GPURenderPassEncoder;
 class GPUTextureCopyView;
 
+class Execution;
+
 class GPUCommandEncoder : public DawnObject<DawnCommandEncoder> {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -34,6 +36,13 @@ class GPUCommandEncoder : public DawnObject<DawnCommandEncoder> {
   GPURenderPassEncoder* beginRenderPass(
       const GPURenderPassDescriptor* descriptor);
   GPUComputePassEncoder* beginComputePass();
+  void setNnGraphInput(GPUBuffer* buffer,
+                       uint32_t index,
+                       Execution* graph);
+  void setNnGraphOutput(GPUBuffer* buffer,
+                        uint32_t index,
+                        Execution* graph);
+  void executeNnGraph(Execution* graph);
   void copyBufferToBuffer(GPUBuffer* src,
                           uint64_t src_offset,
                           GPUBuffer* dst,
