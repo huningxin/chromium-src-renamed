@@ -91,9 +91,13 @@ void SaveTemporaryImages(std::map<uint32_t, MPSImage*>& temporary_images,
 
 }  // namespace
 
+  
+ExecutionImplMacMPS* ExecutionImplMacMPS::instance_ = nullptr;
+
 ExecutionImplMacMPS::ExecutionImplMacMPS(
     base::WeakPtr<CompilationImplMac> compilation,
     mojo::ScopedSharedBufferHandle memory) {
+  ExecutionImplMacMPS::instance_ = this;
   compilation_ = compilation;
   uint32_t mapped_length = 0;
   SetupOperandInfoForOperands(inputs_info_, compilation_->operands_,
@@ -158,23 +162,38 @@ void ExecutionImplMacMPS::CreateOutputMTLBuffer() {
   }
 }
 
-void ExecutionImplMacMPS::StartCompute(StartComputeCallback callback) {
-  DLOG(INFO) << "ExecutionImplMac::StartCompute";
+ExecutionImplMacMPS* ExecutionImplMacMPS::getInstance(uint32_t id) {
+  // TODO: support instance id
+  return ExecutionImplMacMPS::instance_;
+}
+API_AVAILABLE(macosx(10.13))
+void ExecutionImplMacMPS::setInputMtlBuffer(const id<MTLBuffer>& buffer, uint32_t index) {
+  input_mtlbuffers_[index] = buffer;
+}
+
+API_AVAILABLE(macosx(10.13))
+void ExecutionImplMacMPS::setOutputMtlBuffer(const id<MTLBuffer>& buffer, uint32_t index) {
+  output_mtlbuffers_[index] = buffer;
+}
+
+API_AVAILABLE(macosx(10.13))
+bool ExecutionImplMacMPS::encodeToCommandBuffer(const id<MTLCommandBuffer>& command_buffer, bool cpu_data) {
   bool success = true;
   if (@available(macOS 10.13, *)) {
     do {
       @autoreleasepool {
-        id<MTLCommandBuffer> command_buffer =
-            [GetMPSCNNContext().command_queue commandBuffer];
-
         NSMutableArray<MPSImage*>* image_array =
             [NSMutableArray arrayWithCapacity:1];
         for (size_t i = 0; i < compilation_->inputs_.size(); ++i) {
-          std::unique_ptr<OperandInfo>& input_data = inputs_info_[i];
           MPSImage* mps_img = input_mpsimages_[i].get();
           const id<MTLBuffer> mtl_buffer = input_mtlbuffers_[i];
-          UploadToMPSImage(mps_img, mtl_buffer, command_buffer,
-                           input_data->mapping.get(), input_data->length);
+          if (cpu_data) {
+            std::unique_ptr<OperandInfo>& input_data = inputs_info_[i];
+            UploadToMPSImage(mps_img, mtl_buffer, command_buffer,
+                             input_data->mapping.get(), input_data->length);
+          } else {
+            UploadToMPSImage(mps_img, mtl_buffer, command_buffer);
+          }
           [image_array addObject:mps_img];
         }
 
@@ -269,6 +288,27 @@ void ExecutionImplMacMPS::StartCompute(StartComputeCallback callback) {
           [encoder endEncoding];
         }
 
+        // [command_buffer commit];
+        // [command_buffer waitUntilCompleted];
+      }  // @autoreleasepool
+    } while (0);
+  }
+  return success;
+}
+
+void ExecutionImplMacMPS::StartCompute(StartComputeCallback callback) {
+  DLOG(INFO) << "ExecutionImplMac::StartCompute";
+  bool success = true;
+  if (@available(macOS 10.13, *)) {
+    do {
+      @autoreleasepool {
+        id<MTLCommandBuffer> command_buffer =
+            [GetMPSCNNContext().command_queue commandBuffer];
+
+        success = encodeToCommandBuffer(command_buffer, true);
+        if (!success)
+          break;
+
         [command_buffer commit];
         [command_buffer waitUntilCompleted];
 
@@ -296,7 +336,9 @@ void ExecutionImplMacMPS::UploadToMPSImage(
     const void* cpu_buffer,
     size_t length) {
   if (@available(macOS 10.13, *)) {
-    memcpy([mtl_buffer contents], cpu_buffer, length);
+    if (cpu_buffer != nullptr) {
+      memcpy([mtl_buffer contents], cpu_buffer, length);
+    }
     id<MTLComputeCommandEncoder> encoder =
         [command_buffer computeCommandEncoder];
     id<MTLComputePipelineState> state =

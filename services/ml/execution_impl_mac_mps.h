@@ -17,6 +17,7 @@
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/system/buffer.h"
 #include "services/ml/common.h"
+#include "services/ml/export.h"
 #include "services/ml/compilation_impl_mac.h"
 #include "services/ml/public/mojom/execution.mojom.h"
 
@@ -25,7 +26,7 @@
 
 namespace ml {
 
-class ExecutionImplMacMPS : public mojom::Execution {
+class ML_EXPORT ExecutionImplMacMPS : public mojom::Execution {
  public:
   ExecutionImplMacMPS(base::WeakPtr<CompilationImplMac>,
                       mojo::ScopedSharedBufferHandle);
@@ -34,6 +35,12 @@ class ExecutionImplMacMPS : public mojom::Execution {
   void StartCompute(StartComputeCallback callback) override;
 
   bool IsValid() const;
+
+  // WebGPU execution POC
+  static ExecutionImplMacMPS* getInstance(uint32_t id);
+  API_AVAILABLE(macos(10_13)) void setInputMtlBuffer(const id<MTLBuffer>&, uint32_t);
+  API_AVAILABLE(macos(10_13)) void setOutputMtlBuffer(const id<MTLBuffer>&, uint32_t);
+  API_AVAILABLE(macos(10_13)) bool encodeToCommandBuffer(const id<MTLCommandBuffer>&, bool cpu_data = false);
 
  private:
   void API_AVAILABLE(macos(10_13))
@@ -45,8 +52,10 @@ class ExecutionImplMacMPS : public mojom::Execution {
   void API_AVAILABLE(macos(10_13)) UploadToMPSImage(const MPSImage*,
                                                     const id<MTLBuffer>&,
                                                     const id<MTLCommandBuffer>&,
-                                                    const void*,
-                                                    size_t);
+                                                    const void* cpu_buffer = nullptr,
+                                                    size_t length = 0);
+
+  static ExecutionImplMacMPS* instance_;
 
   base::WeakPtr<CompilationImplMac> compilation_;
 
