@@ -92,12 +92,13 @@ void SaveTemporaryImages(std::map<uint32_t, MPSImage*>& temporary_images,
 }  // namespace
 
   
-ExecutionImplMacMPS* ExecutionImplMacMPS::instance_ = nullptr;
+std::map<uint32_t, ExecutionImplMacMPS*> ExecutionImplMacMPS::instances_;
 
 ExecutionImplMacMPS::ExecutionImplMacMPS(
     base::WeakPtr<CompilationImplMac> compilation,
-    mojo::ScopedSharedBufferHandle memory) {
-  ExecutionImplMacMPS::instance_ = this;
+    mojo::ScopedSharedBufferHandle memory,
+    uint32_t id) {
+  ExecutionImplMacMPS::instances_[id] = this;
   compilation_ = compilation;
   uint32_t mapped_length = 0;
   SetupOperandInfoForOperands(inputs_info_, compilation_->operands_,
@@ -163,8 +164,8 @@ void ExecutionImplMacMPS::CreateOutputMTLBuffer() {
 }
 
 ExecutionImplMacMPS* ExecutionImplMacMPS::getInstance(uint32_t id) {
-  // TODO: support instance id
-  return ExecutionImplMacMPS::instance_;
+  DCHECK(ExecutionImplMacMPS::instances_[id]);
+  return ExecutionImplMacMPS::instances_[id];
 }
 API_AVAILABLE(macosx(10.13))
 void ExecutionImplMacMPS::setInputMtlBuffer(const id<MTLBuffer>& buffer, uint32_t index) {

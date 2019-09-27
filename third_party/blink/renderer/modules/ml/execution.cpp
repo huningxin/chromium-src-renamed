@@ -57,6 +57,7 @@ uint32_t requiredSize(int32_t type, const WTF::Vector<uint32_t>& dimensions) {
 
 Execution::Execution(ml::mojom::blink::ExecutionInitParamsPtr init_params,
                      GPUDevice* gpu_device) {
+  id_ = init_params->id;
   gpu_device_ = gpu_device;
   execution_.Bind(std::move(init_params->execution));
   execution_.set_connection_error_handler(

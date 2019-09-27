@@ -70,6 +70,8 @@ void CompilationImplMac::Finish(int32_t preference, FinishCallback callback) {
   }
 }
 
+static uint32_t graph_id = 0;
+
 void CompilationImplMac::CreateExecution(CreateExecutionCallback callback) {
   DLOG(INFO) << "CompilationImplMac::CreateExecution";
   auto init_params = mojom::ExecutionInitParams::New();
@@ -110,8 +112,9 @@ void CompilationImplMac::CreateExecution(CreateExecutionCallback callback) {
     }
     mojo::MakeStrongBinding(std::move(impl), mojo::MakeRequest(&ptr_info));
   } else {
+    init_params->id = graph_id++;
     auto impl = std::make_unique<ExecutionImplMacMPS>(
-        compilation_factory_.GetWeakPtr(), std::move(memory_handle));
+        compilation_factory_.GetWeakPtr(), std::move(memory_handle), init_params->id);
     if (!impl->IsValid()) {
       std::move(callback).Run(mojom::BAD_DATA, nullptr);
       return;

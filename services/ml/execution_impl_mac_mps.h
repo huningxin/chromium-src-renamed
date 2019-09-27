@@ -29,7 +29,8 @@ namespace ml {
 class ML_EXPORT ExecutionImplMacMPS : public mojom::Execution {
  public:
   ExecutionImplMacMPS(base::WeakPtr<CompilationImplMac>,
-                      mojo::ScopedSharedBufferHandle);
+                      mojo::ScopedSharedBufferHandle,
+                      uint32_t id);
   ~ExecutionImplMacMPS() override;
 
   void StartCompute(StartComputeCallback callback) override;
@@ -55,7 +56,7 @@ class ML_EXPORT ExecutionImplMacMPS : public mojom::Execution {
                                                     const void* cpu_buffer = nullptr,
                                                     size_t length = 0);
 
-  static ExecutionImplMacMPS* instance_;
+  static std::map<uint32_t, ExecutionImplMacMPS*> instances_;
 
   base::WeakPtr<CompilationImplMac> compilation_;
 
